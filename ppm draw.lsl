@@ -10,12 +10,16 @@ integer faces_across = 4;
 /* Number of verical faces per column of each prim. */
 integer faces_down = 2;
 
-/* Whether to use ALL_SIDES for the pixel face. */
-integer all_sides = FALSE;
-
+/* The channel used for dialogs/text boxes/listeners. */
 integer channel;
+
+/* The ID of the currently active listener. */
 integer listener;
 
+/* The ID of the currently active HTTP request. */
+key http_request_id;
+
+/* Toggle link number text for prims on/off. */
 set_link_labels(integer toggle)
 {
     if (toggle)
@@ -58,14 +62,16 @@ align_prims()
     }
 }
 
+/* Return the link corresponding to an x, y coordinate on the grid. */
 integer pixel_link(integer x, integer y)
 {
     return (integer) ((x / faces_across) + (y / faces_down * links_across)) + 1;
 }
 
+/* Return the face corresponding to an x, y coordinate on the grid. */
 integer pixel_face(integer x, integer y)
 {
-    if (all_sides)
+    if (faces_across == 1 && faces_down == 1)
     {
         return ALL_SIDES;
     }
@@ -75,23 +81,25 @@ integer pixel_face(integer x, integer y)
     }
 }
 
+/* Set a pixel on the grid to a specified colour. */
 plot(integer x, integer y, vector color)
 {
     llSetLinkColor(pixel_link(x, y), color, pixel_face(x, y));
 }
 
+/* Set all pixels to a specified colour. */
 fill(vector color)
 {
     llSetLinkColor(LINK_SET, color, ALL_SIDES);
 }
 
+/* Determine if a character is whitespace. */
 integer is_whitespace(string c)
 {
     return c == " " || c == "\n";
 }
 
-key http_request_id;
-
+/* Draw an ASCII PPM to the grid. */
 draw_ppm(string ppm)
 {
     integer i;
@@ -238,7 +246,7 @@ state set_links_across
     state_entry()
     {
         llListen(channel, "", llGetOwner(), "");
-        llTextBox(llGetOwner(), "Enter links across:", channel);
+        llTextBox(llGetOwner(), "Enter the number of linked prims across:", channel);
     }
     
     listen(integer channel, string name, key id, string message)
@@ -254,7 +262,7 @@ state set_links_down
     state_entry()
     {
         llListen(channel, "", llGetOwner(), "");
-        llTextBox(llGetOwner(), "Enter links down:", channel);
+        llTextBox(llGetOwner(), "Enter the number of linked prims down:", channel);
     }
     
     listen(integer channel, string name, key id, string message)
@@ -270,7 +278,7 @@ state set_faces_across
     state_entry()
     {
         llListen(channel, "", llGetOwner(), "");
-        llTextBox(llGetOwner(), "Enter faces across:", channel);
+        llTextBox(llGetOwner(), "Enter the number of faces across on each prim:", channel);
     }
     
     listen(integer channel, string name, key id, string message)
@@ -286,17 +294,24 @@ state set_faces_down
     state_entry()
     {
         llListen(channel, "", llGetOwner(), "");
-        llTextBox(llGetOwner(), "Enter faces down:", channel);
+        llTextBox(llGetOwner(), "Enter the number of faces down on each prim:", channel);
     }
     
     listen(integer channel, string name, key id, string message)
     {
         faces_down = (integer) message;
         
-        if (faces_across == 1 && faces_down == 1)
-        {
-            all_sides = TRUE;
-        }
+        state finish_setup;
+    }
+}
+
+state finish_setup
+{
+    state_entry()
+    {
+        align_prims();
+        set_link_labels(FALSE);
+        fill(<0, 0, 0>);
         
         state main;
     }
@@ -304,15 +319,6 @@ state set_faces_down
 
 state main
 {
-    state_entry()
-    {
-        align_prims();
-        
-        set_link_labels(FALSE);
-        
-        fill(<0, 0, 0>);        
-    }
-    
     touch_start(integer detected)
     {
         key toucher = llDetectedKey(0);
@@ -324,7 +330,31 @@ state main
         
         llListenRemove(listener);
         listener = llListen(channel, "", toucher, "");
-        llTextBox(toucher, "Enter the URL of an ASCII PPM:", channel);
+        llDialog(toucher, "What would you like to do?", ["Draw PPM", "Clear", "Cancel"], channel);
+    }
+    
+    listen(integer channel, string name, key id, string message)
+    {
+        llListenRemove(listener);
+        
+        if (message == "Draw PPM")
+        {
+            state draw_ppm_from_url;
+        }
+        else if (message == "Clear")
+        {
+            fill(<0, 0, 0>);
+        }
+    }
+}
+
+state draw_ppm_from_url
+{
+    state_entry()
+    {
+        llListenRemove(listener);
+        listener = llListen(channel, "", llGetOwner(), "");
+        llTextBox(llGetOwner(), "Enter the URL of an ASCII PPM:", channel);
     }
     
     listen(integer channel, string name, key id, string message)
@@ -338,5 +368,11 @@ state main
         {
             draw_ppm(body);
         }
+        else
+        {
+            llOwnerSay("Error: [" + (string) status + "] " + body);
+        }
+        
+        state main;
     }
 }
