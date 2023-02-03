@@ -354,12 +354,26 @@ state draw_ppm_from_url
     {
         llListenRemove(listener);
         listener = llListen(channel, "", llGetOwner(), "");
-        llTextBox(llGetOwner(), "Enter the URL of an ASCII PPM:", channel);
+        llTextBox(llGetOwner(), "Enter the URL of an ASCII PPM (leave blank to cancel):", channel);
+    }
+    
+    touch_start(integer detected)
+    {
+        llListenRemove(listener);
+        listener = llListen(channel, "", llGetOwner(), "");
+        llTextBox(llGetOwner(), "Enter the URL of an ASCII PPM (leave blank to cancel):", channel);
     }
     
     listen(integer channel, string name, key id, string message)
     {
-        llHTTPRequest(message, [HTTP_BODY_MAXLENGTH, 16384], "");
+        if (message == "")
+        {
+            state main;
+        }
+        else
+        {
+            llHTTPRequest(message, [HTTP_BODY_MAXLENGTH, 16384], "");
+        }
     }
     
     http_response(key request_id, integer status, list metadata, string body)
